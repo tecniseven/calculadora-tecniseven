@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculadora de Retenciones e Impuestos (Bolívares)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.3/cdn.min.js" defer></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen p-4 sm:p-8 font-sans" x-data="taxCalculator()">
+    <div class="max-w-5xl mx-auto space-y-6">
+        
+        <!-- Header -->
+        <header class="bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+                <span class="bg-teal-500/10 text-teal-400 text-xs font-semibold px-3 py-1 rounded-full uppercase tracking-wider">Venezuela • Bolívares (Bs.)</span>
+                <h1 class="text-2xl sm:text-3xl font-extrabold text-white mt-1">Calculadora de Retenciones</h1>
+                <p class="text-slate-400 text-sm mt-1">Alcaldía (1,40%), SENIAT (1%) y Retención de IVA (25%) guardado localmente.</p>
+            </div>
+            
+            <!-- Global Total Card -->
+            <div class="bg-teal-950/80 border border-teal-500/30 rounded-xl px-6 py-4 text-right w-full md:w-auto">
+                <span class="text-xs font-medium text-teal-300 uppercase tracking-wide block">Total General a Pagar</span>
+                <span class="text-2xl sm:text-3xl font-black text-teal-400" x-text="formatBs(totalGeneral)"></span>
+            </div>
+        </header>
+
+        <!-- Main Workspace -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <!-- Left 2 Cols: Invoice Table -->
+            <div class="lg:col-span-2 bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-xl space-y-4">
+                <div class="flex justify-between items-center flex-wrap gap-2">
+                    <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                        <span>📋</span> Facturas Registradas
+                    </h2>
+                    <div class="flex gap-2">
+                        <button @click="resetToDefault" class="bg-slate-700 hover:bg-slate-600 text-slate-300 font-semibold text-xs px-3 py-2 rounded-xl transition">
+                            🔄 Restaurar Originales
+                        </button>
+                        <button @click="addInvoice" class="bg-teal-600 hover:bg-teal-500 text-white font-semibold text-xs px-4 py-2 rounded-xl transition flex items-center gap-1 shadow-lg shadow-teal-900/40">
+                            <span>+</span> Agregar Factura
+                        </button>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-sm">
+                        <thead>
+                            <tr class="border-b border-slate-700 text-slate-400 text-xs uppercase tracking-wider">
+                                <th class="py-3 px-2">Factura / Ref</th>
+                                <th class="py-3 px-2 text-right">Base Imponible (Bs.)</th>
+                                <th class="py-3 px-2 text-right">IVA 16% (Bs.)</th>
+                                <th class="py-3 px-2 text-right text-teal-400">Total Pagar (Bs.)</th>
+                                <th class="py-3 px-2 text-center">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-700/50">
+                            <template x-for="(inv, index) in invoices" :key="index">
+                                <tr class="hover:bg-slate-750/50 transition">
+                                    <td class="py-3 px-2">
+                                        <input type="text" x-model="inv.name" @input="saveToStorage" placeholder="Ej: Factura #001" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-white w-full focus:outline-none focus:border-teal-500 text-sm">
+                                    </td>
+                                    <td class="py-3 px-2 text-right">
+                                        <input type="number" step="0.01" x-model.number="inv.base" @input="calcInvoice(inv)" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-white w-32 text-right focus:outline-none focus:border-teal-500 text-sm font-mono">
+                                    </td>
+                                    <td class="py-3 px-2 text-right text-slate-300 font-mono" x-text="formatBs(inv.iva)"></td>
+                                    <td class="py-3 px-2 text-right font-bold text-teal-400 font-mono" x-text="formatBs(inv.totalPagar)"></td>
+                                    <td class="py-3 px-2 text-center">
+                                        <button @click="removeInvoice(index)" class="text-rose-400 hover:text-rose-300 p-1.5 rounded-lg transition" title="Eliminar">
+                                            🗑️
+                                        </button>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Right Col: Breakdown & Settings Summary -->
+            <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-xl space-y-6 flex flex-col justify-between">
+                <div class="space-y-4">
+                    <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                        <span>📊</span> Desglose de Tributos
+                    </h2>
+                    
+                    <div class="space-y-3">
+                        <div class="bg-slate-900/70 border border-slate-700/60 rounded-xl p-3.5 flex justify-between items-center">
+                            <div>
+                                <span class="text-xs text-slate-400 block">Alcaldía (1,40%)</span>
+                                <span class="text-xs text-slate-500">Sobre Base Imponible</span>
+                            </div>
+                            <span class="font-mono font-bold text-white" x-text="formatBs(totalAlcaldia)"></span>
+                        </div>
+
+                        <div class="bg-slate-900/70 border border-slate-700/60 rounded-xl p-3.5 flex justify-between items-center">
+                            <div>
+                                <span class="text-xs text-slate-400 block">SENIAT (1,00%)</span>
+                                <span class="text-xs text-slate-500">Sobre Base Imponible</span>
+                            </div>
+                            <span class="font-mono font-bold text-white" x-text="formatBs(totalSeniat1)"></span>
+                        </div>
+
+                        <div class="bg-slate-900/70 border border-slate-700/60 rounded-xl p-3.5 flex justify-between items-center">
+                            <div>
+                                <span class="text-xs text-slate-400 block">Retención IVA (25%)</span>
+                                <span class="text-xs text-slate-500">Sobre el IVA (16%)</span>
+                            </div>
+                            <span class="font-mono font-bold text-white" x-text="formatBs(totalSeniatIva)"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-teal-950/30 border border-teal-500/20 rounded-xl p-4 text-xs text-teal-300/80 space-y-2 leading-relaxed">
+                    <p>💾 <strong class="text-teal-300">Guardado Automático:</strong> Tus facturas se guardan en tu navegador para que puedas consultarlas en el futuro.</p>
+                    <p>💡 Funciona 100% offline sin necesidad de internet.</p>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        function taxCalculator() {
+            return {
+                invoices: [],
+                defaultInvoices: [
+                    { name: 'Factura N° 0720', base: 1155000, iva: 0, totalPagar: 0 },
+                    { name: 'Factura N° 0687', base: 1052000, iva: 0, totalPagar: 0 }
+                ],
+                init() {
+                    let saved = localStorage.getItem('multipc_retenciones_invoices');
+                    if (saved) {
+                        try {
+                            this.invoices = JSON.parse(saved);
+                        } catch(e) {
+                            this.invoices = JSON.parse(JSON.stringify(this.defaultInvoices));
+                        }
+                    } else {
+                        this.invoices = JSON.parse(JSON.stringify(this.defaultInvoices));
+                    }
+                    this.invoices.forEach(inv => this.calcInvoice(inv));
+                },
+                calcInvoice(inv) {
+                    let base = Number(inv.base) || 0;
+                    inv.iva = base * 0.16;
+                    let alc = base * 0.014;
+                    let sen1 = base * 0.01;
+                    let senIva = inv.iva * 0.25;
+                    inv.totalPagar = alc + sen1 + senIva;
+                    this.saveToStorage();
+                },
+                addInvoice() {
+                    let newInv = { name: 'Nueva Factura', base: 0, iva: 0, totalPagar: 0 };
+                    this.invoices.push(newInv);
+                    this.calcInvoice(newInv);
+                },
+                removeInvoice(index) {
+                    this.invoices.splice(index, 1);
+                    this.saveToStorage();
+                },
+                resetToDefault() {
+                    if (confirm('¿Restaurar las facturas originales de Multipc Corp?')) {
+                        this.invoices = JSON.parse(JSON.stringify(this.defaultInvoices));
+                        this.invoices.forEach(inv => this.calcInvoice(inv));
+                    }
+                },
+                saveToStorage() {
+                    localStorage.setItem('multipc_retenciones_invoices', JSON.stringify(this.invoices));
+                },
+                get totalAlcaldia() {
+                    return this.invoices.reduce((sum, inv) => sum + ((Number(inv.base) || 0) * 0.014), 0);
+                },
+                get totalSeniat1() {
+                    return this.invoices.reduce((sum, inv) => sum + ((Number(inv.base) || 0) * 0.01), 0);
+                },
+                get totalSeniatIva() {
+                    return this.invoices.reduce((sum, inv) => sum + (((Number(inv.base) || 0) * 0.16) * 0.25), 0);
+                },
+                get totalGeneral() {
+                    return this.invoices.reduce((sum, inv) => sum + (Number(inv.totalPagar) || 0), 0);
+                },
+                formatBs(value) {
+                    return 'Bs. ' + Number(value || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                }
+            }
+        }
+    </script>
+</body>
+</html>
